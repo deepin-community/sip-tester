@@ -49,6 +49,16 @@ Libraries for random distributions):
 cmake . -DUSE_SSL=1 -DUSE_SCTP=1 -DUSE_PCAP=1 -DUSE_GSL=1
 ```
 
+To enable TLS key logging pass `-DUSE_SSL=KL` to cmake.
+
+TLS key logging records the TLS Session Keys to a key log file when the `SSLKEYLOGFILE` environment variable is set. It allows to decrypt SIPS traffic generated or received by SIPp using Wireshark. For more details see: https://wiki.wireshark.org/TLS
+
+You need to compile with OpenSSL>=1.1.1 in order to use TLS key logging.
+
+The TLS key log file format is described here: https://datatracker.ietf.org/doc/draft-ietf-tls-keylogfile/
+
+_Please note the security considerations ("3. Security Considerations")!_
+
 ## Static builds
 
 SIPp can be built into a single static binary, removing the need for
@@ -60,14 +70,33 @@ and for now, it only works on Alpine Linux.
 
 To build a static binary, pass `-DBUILD_STATIC=1` to cmake.
 
-Two Alpine-based `Dockerfile`s are provided, which can be used as a
-build-environment.  Use either `Dockerfile` or `Dockerfile.full` in
-the following commands:
+An Alpine-based `Dockerfile` is provided, which can be used as a
+build-environment.  Build with the following commands:
 
 ```
 git submodule update --init
 docker build -t sipp -f docker/Dockerfile --output=. --target=bin .
 ```
+
+Special arguments can be passed with `--build-arg`:
+* `FULL=1` - build all optional components.
+* `DEBUG=1` - build with debug symbols.
+
+## Debian-based docker build
+
+SIPp can be built in a Debian-based docker container. Unlike the Alpine
+build, this build is not static, and it supports wolfSSL.
+
+To build a Debian-based docker container, run:
+```
+git submodule update --init
+docker build -t sipp -f docker/Dockerfile.debian .
+```
+
+Special arguments can be passed with `--build-arg`:
+* `FULL=1` - build all optional components, including OpenSSL.
+* `WOLFSSL=1` - build with wolfSSL (only works without FULL).
+* `DEBUG=1` - build with debug symbols.
 
 # Support
 
@@ -85,15 +114,13 @@ list](https://lists.sourceforge.net/lists/listinfo/sipp-users).
     ```
 * Then:
     ```
-    mkdir sipp-$VERSION
-    git ls-files -z | tar -c --null \
-       --exclude=gmock --exclude=gtest --files-from=- | tar -xC sipp-$VERSION
-    cp sipp.1 sipp-$VERSION/
-    # check version, and do
-    cp ${PROJECT_BINARY_DIR:-.}/version.h sipp-$VERSION/include/
-    tar --sort=name --mtime="@$(git log -1 --format=%ct)" \
-          --owner=0 --group=0 --numeric-owner \
-          -czf sipp-$VERSION.tar.gz sipp-$VERSION
+    git ls-files -z | grep -zv '^\.\|gtest\|gmock\|version.h' | \
+      tar --transform "s:^version.h:include/version.h:" \
+          --transform "s:^:sipp-$VERSION/:" \
+          --sort=name --mtime="@$(git log -1 --format=%ct)" \
+          --owner=0 --group=0 --null --files-from=- \
+          --numeric-owner -zcf sipp-$VERSION.tar.gz \
+          sipp.1 version.h
     ```
 * Upload to github as "binary". Note that github replaces tilde sign
   (for ~rcX) with a period.
@@ -101,7 +128,6 @@ list](https://lists.sourceforge.net/lists/listinfo/sipp-users).
     ```
     docker build -t sipp -f docker/Dockerfile --output=. --target=bin .
     ```
-* Note that the static build is broken at the moment. See `ldd sipp`.
 
 # Contributing
 

@@ -27,11 +27,13 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include "rtpstream.hpp"
+#include "srtp_channel.hpp"
 
 #include <sys/time.h>
 #include <memory>
 #include <vector>
 #include <errno.h>
+#include <sstream>
 
 /* stub to add extra debugging/logging... */
 static void debugprint(const char* format, ...)
@@ -126,8 +128,6 @@ int           num_ready_threads = 0;
 int           busy_threads_max = 0;
 int           ready_threads_max = 0;
 
-unsigned int  global_ssrc_id = 0;
-
 FILE*         debugafile = nullptr;
 FILE*         debugvfile = nullptr;
 pthread_mutex_t  debugamutex = PTHREAD_MUTEX_INITIALIZER;
@@ -150,22 +150,24 @@ pthread_mutex_t  debugremutexvideo = PTHREAD_MUTEX_INITIALIZER;
 // RTPSTREAM ECHO
 pthread_t    pthread_audioecho_id;
 pthread_t    pthread_videoecho_id;
-bool quit_audioecho_thread = false;
-bool quit_videoecho_thread = false;
+#ifdef USE_TLS
+static bool quit_audioecho_thread = false;
+static bool quit_videoecho_thread = false;
+#endif
 pthread_mutex_t quit_mutexaudio = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t quit_mutexvideo = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t quit_cvaudio = PTHREAD_COND_INITIALIZER;
 pthread_cond_t quit_cvvideo = PTHREAD_COND_INITIALIZER;
 
 // JLSRTP contexts
-JLSRTP g_txUACAudio;
-JLSRTP g_rxUACAudio;
-JLSRTP g_txUACVideo;
-JLSRTP g_rxUACVideo;
-JLSRTP g_rxUASAudio;
-JLSRTP g_txUASAudio;
-JLSRTP g_rxUASVideo;
-JLSRTP g_txUASVideo;
+SrtpChannel g_txUACAudio;
+SrtpChannel g_rxUACAudio;
+SrtpChannel g_txUACVideo;
+SrtpChannel g_rxUACVideo;
+SrtpChannel g_rxUASAudio;
+SrtpChannel g_txUASAudio;
+SrtpChannel g_rxUASVideo;
+SrtpChannel g_txUASVideo;
 pthread_mutex_t uacAudioMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t uacVideoMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t uasAudioMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -197,6 +199,22 @@ static unsigned long long getThreadId(pthread_t p)
 
     return retVal;
 }
+
+#ifdef USE_TLS
+static std::string build_rtpecho_filename(const char* mediaName)
+{
+    std::ostringstream oss;
+    std::string rtpecho_filename;
+
+    if (mediaName)
+    {
+        oss << "debugrefile" << mediaName << "_" << time(NULL) << "." << "log";
+        rtpecho_filename = oss.str();
+    }
+
+    return rtpecho_filename;
+}
+#endif // USE_TLS
 
 void printAudioHexUS(char const* note, unsigned char const* string, unsigned int size, unsigned long long extrainfo, int moreinfo)
 {
@@ -1315,7 +1333,7 @@ static void* rtpstream_playback_thread(void* params)
     printAudioVector("----PACKET COUNTS----", rs_apackets);
     printVideoVector("----PACKET COUNTS----", rs_vpackets);
 
-    for (unsigned int i = 0; i < threaddata->max_tasks; i++)
+    for (unsigned int i = 0; i < threaddata->num_tasks; i++)
     {
         taskinfo = (&threaddata->tasklist)[i];
 
@@ -1602,11 +1620,6 @@ int rtpstream_new_call(rtpstream_callinfo_t* callinfo)
     taskinfo->video_srtp_echo_active = 0;
 #endif // USE_TLS
 
-    /* generate random ssrc */
-    if (global_ssrc_id == 0) {
-        global_ssrc_id = rand();
-    }
-
     /* rtp stream members */
     taskinfo->audio_ssrc_id = global_ssrc_id++;
     taskinfo->video_ssrc_id = global_ssrc_id++;
@@ -1759,12 +1772,14 @@ int rtpstream_cache_file(char* filename,
 
         filecontents = (char *)malloc(statbuffer.st_size);
         if (!filecontents) {
+            fclose(f);
             /* could not alloc mem */
             return -1;
         }
         if (!fread(filecontents, statbuffer.st_size, 1, f)) {
             /* could not read file */
             free(filecontents);
+            fclose(f);
             return -1;
         }
         fclose(f);
@@ -1811,7 +1826,7 @@ static int rtpstream_setsocketoptions(int sock)
 /* code checked */
 static int rtpstream_get_localport(int* rtpsocket, int* rtcpsocket)
 {
-    int port_number;
+    int port_number = 0;
     int tries;
     struct sockaddr_storage address;
     int max_tries = (min_rtp_port < (max_rtp_port - 2)) ? (max_rtp_port - min_rtp_port) : 1;
@@ -1876,7 +1891,7 @@ static int rtpstream_get_localport(int* rtpsocket, int* rtcpsocket)
     /* create socket for rtcp - ignore any errors, we only bind so we
      * won't send icmp-port-unreachable when rtcp arrives */
     *rtcpsocket = socket(media_ip_is_ipv6?PF_INET6:PF_INET, SOCK_DGRAM, 0);
-    if (*rtcpsocket != -1) {
+    if (*rtcpsocket != -1 && port_number > 0) {
         /* try to bind it to our preferred address */
         sockaddr_update_port(&address, port_number + 1);
         if (::bind(*rtcpsocket, (sockaddr *) (void *)&address,
@@ -2633,6 +2648,7 @@ void rtpstream_audioecho_thread(void* param)
     unsigned int host_timestamp = 0;
     unsigned int host_ssrc = 0;
     bool abnormal_termination = false;
+    quit_audioecho_thread = false;
     ParamPass p;
 
     tspec.tv_sec = 0;
@@ -2702,7 +2718,7 @@ void rtpstream_audioecho_thread(void* param)
                 pthread_mutex_lock(&debugremutexaudio);
                 if (debugrefileaudio != nullptr)
                 {
-                    fprintf(debugrefileaudio, "DATA SUCCESSFULLY RECEIVED [AUDIO] nr = %ld...", nr);
+                    fprintf(debugrefileaudio, "DATA SUCCESSFULLY RECEIVED [AUDIO] nr = %d...", int(nr));
                 }
                 for (int i = 0; i < 12; i++)
                 {
@@ -2723,6 +2739,7 @@ void rtpstream_audioecho_thread(void* param)
                     payload_data.clear();
 
                     // DECRYPT
+                    g_rxUASAudio.setSSRC(ntohl(((rtp_header_t*)audio_packet_in.data())->ssrc_id)); // set incoming SSRC id
                     rc = g_rxUASAudio.processIncomingPacket(seq_num, audio_packet_in, rtp_header, payload_data);
                     pthread_mutex_lock(&debugremutexaudio);
                     if (debugrefileaudio != nullptr)
@@ -2765,6 +2782,7 @@ void rtpstream_audioecho_thread(void* param)
                     memcpy(payload_data.data(), msg.get() + sizeof(rtp_header_t), g_txUASAudio.getSrtpPayloadSize());
 
                     // ENCRYPT
+                    g_txUASAudio.setSSRC(ntohl(((rtp_header_t*)audio_packet_in.data())->ssrc_id)); // set incoming SSRC id
                     rc = g_txUASAudio.processOutgoingPacket(seq_num, rtp_header, payload_data, audio_packet_out);
                     pthread_mutex_lock(&debugremutexaudio);
                     if (debugrefileaudio != nullptr)
@@ -2780,7 +2798,8 @@ void rtpstream_audioecho_thread(void* param)
                     pthread_mutex_lock(&debugremutexaudio);
                     if (debugrefileaudio != nullptr)
                     {
-                        fprintf(debugrefileaudio, "DATA SUCCESSFULLY SENT [AUDIO] seq_num = [%u] -- MISMATCHED RECV/SENT BYTE COUNT -- errno = %d nr = %ld ns = %ld\n", seq_num, errno, nr, ns);
+                        fprintf(debugrefileaudio, "DATA SUCCESSFULLY SENT [AUDIO] seq_num = [%u] -- MISMATCHED RECV/SENT BYTE COUNT -- errno = %d nr = %d ns = %d\n",
+                                seq_num, errno, int(nr), int(ns));
                     }
                     pthread_mutex_unlock(&debugremutexaudio);
                 } else {
@@ -2892,6 +2911,7 @@ void rtpstream_videoecho_thread(void* param)
     unsigned int host_timestamp = 0;
     unsigned int host_ssrc = 0;
     bool abnormal_termination = false;
+    quit_videoecho_thread = false;
     ParamPass p;
 
     tspec.tv_sec = 0;
@@ -2961,7 +2981,7 @@ void rtpstream_videoecho_thread(void* param)
                 pthread_mutex_lock(&debugremutexvideo);
                 if (debugrefilevideo != nullptr)
                 {
-                    fprintf(debugrefilevideo, "DATA SUCCESSFULLY RECEIVED [VIDEO] nr = %ld...", nr);
+                    fprintf(debugrefilevideo, "DATA SUCCESSFULLY RECEIVED [VIDEO] nr = %d...", int(nr));
                 }
                 for (int i = 0; i < 12; i++)
                 {
@@ -2981,6 +3001,7 @@ void rtpstream_videoecho_thread(void* param)
                     rtp_header.clear();
                     payload_data.clear();
                     // DECRYPT
+                    g_rxUASVideo.setSSRC(ntohl(((rtp_header_t*)video_packet_in.data())->ssrc_id)); // set incoming SSRC id
                     rc = g_rxUASVideo.processIncomingPacket(seq_num, video_packet_in, rtp_header, payload_data);
                     pthread_mutex_lock(&debugremutexvideo);
                     if (debugrefilevideo != nullptr)
@@ -3023,6 +3044,7 @@ void rtpstream_videoecho_thread(void* param)
                     memcpy(payload_data.data(), msg.get() + sizeof(rtp_header_t), g_txUASVideo.getSrtpPayloadSize());
 
                     // ENCRYPT
+                    g_txUASVideo.setSSRC(ntohl(((rtp_header_t*)video_packet_in.data())->ssrc_id)); // set incoming SSRC id
                     rc = g_txUASVideo.processOutgoingPacket(seq_num, rtp_header, payload_data, video_packet_out);
                     pthread_mutex_lock(&debugremutexvideo);
                     if (debugrefilevideo != nullptr)
@@ -3038,7 +3060,8 @@ void rtpstream_videoecho_thread(void* param)
                     pthread_mutex_lock(&debugremutexvideo);
                     if (debugrefilevideo != nullptr)
                     {
-                        fprintf(debugrefilevideo, "DATA SUCCESSFULLY SENT [VIDEO] seq_num = [%u] -- MISMATCHED RECV/SENT BYTE COUNT -- errno = %d nr = %ld ns = %ld\n", seq_num, errno, nr, ns);
+                        fprintf(debugrefilevideo, "DATA SUCCESSFULLY SENT [VIDEO] seq_num = [%u] -- MISMATCHED RECV/SENT BYTE COUNT -- errno = %d nr = %d ns = %d\n",
+                                seq_num, errno, int(nr), int(ns));
                     }
                     pthread_mutex_unlock(&debugremutexvideo);
                 } else {
@@ -3141,21 +3164,21 @@ int rtpstream_rtpecho_startaudio(rtpstream_callinfo_t* callinfo, JLSRTP& rxUASAu
 
     taskinfo->audio_srtp_echo_active = 1;
 
-    pthread_mutex_lock(&debugremutexaudio);
     if (srtpcheck_debug)
     {
+        pthread_mutex_lock(&debugremutexaudio);
         if (debugrefileaudio == nullptr)
         {
-            debugrefileaudio = fopen("debugrefileaudio", "w");
+            debugrefileaudio = fopen(build_rtpecho_filename("audio").c_str(), "w");
             if (debugrefileaudio == nullptr)
             {
                 /* error encountered opening audio debug file */
-                pthread_mutex_lock(&debugremutexaudio);
+                pthread_mutex_unlock(&debugremutexaudio);
                 return -2;
             }
         }
+        pthread_mutex_unlock(&debugremutexaudio);
     }
-    pthread_mutex_unlock(&debugremutexaudio);
 
     pthread_mutex_lock(&debugremutexaudio);
     if (debugrefileaudio != nullptr)
@@ -3287,6 +3310,7 @@ int rtpstream_rtpecho_stopaudio(rtpstream_callinfo_t* callinfo)
         if (debugrefileaudio)
         {
             fclose(debugrefileaudio);
+            debugrefileaudio = nullptr;
         }
     }
     pthread_mutex_unlock(&debugremutexaudio);
@@ -3313,21 +3337,21 @@ int rtpstream_rtpecho_startvideo(rtpstream_callinfo_t* callinfo, JLSRTP& rxUASVi
 
     taskinfo->video_srtp_echo_active = 1;
 
-    pthread_mutex_lock(&debugremutexvideo);
     if (srtpcheck_debug)
     {
+        pthread_mutex_lock(&debugremutexvideo);
         if (debugrefilevideo == nullptr)
         {
-            debugrefilevideo = fopen("debugrefilevideo", "w");
+            debugrefilevideo = fopen(build_rtpecho_filename("video").c_str(), "w");
             if (debugrefilevideo == nullptr)
             {
-                /* error encountered opening audio debug file */
+                /* error encountered opening video debug file */
                 pthread_mutex_unlock(&debugremutexvideo);
                 return -2;
             }
         }
+        pthread_mutex_unlock(&debugremutexvideo);
     }
-    pthread_mutex_unlock(&debugremutexvideo);
 
     pthread_mutex_lock(&debugremutexvideo);
     if (debugrefilevideo != nullptr)
@@ -3459,6 +3483,8 @@ int rtpstream_rtpecho_stopvideo(rtpstream_callinfo_t* callinfo)
         if (debugrefilevideo)
         {
             fclose(debugrefilevideo);
+            debugrefilevideo = nullptr;
+
         }
     }
     pthread_mutex_unlock(&debugremutexvideo);
@@ -3546,12 +3572,14 @@ int rtpstream_shutdown(std::unordered_map<pthread_t, std::string>& threadIDs)
         rtpcheck_debug)
     {
         fclose(debugvfile);
+        debugvfile = nullptr;
     }
 
     if (debugafile &&
         rtpcheck_debug)
     {
         fclose(debugafile);
+        debugafile = nullptr;
     }
 
     pthread_mutex_destroy(&debugamutex);
