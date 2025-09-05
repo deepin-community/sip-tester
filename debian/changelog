@@ -1,5 +1,249 @@
-template-repository (1.0-1) unstable; urgency=medium
+sip-tester (1:3.7.3-2) unstable; urgency=medium
 
-  * Initial release
+  * fix ftbfs with gcc 14 (Closes: #1081521)
 
- -- Tsic404 <liuheng@deepin.org>  Sat, 28 Jan 2023 13:46:49 +0800
+ -- Victor Seva <vseva@debian.org>  Tue, 17 Sep 2024 16:13:56 +0200
+
+sip-tester (1:3.7.3-1) unstable; urgency=medium
+
+  * fix debian/watch
+  * fix watch detection of version
+  * New upstream version 3.7.3
+  * fix wolfssl build
+  * pkg-config => pkgconf
+  * update Standards-Version 4.7.0, no changes needed
+
+ -- Victor Seva <vseva@debian.org>  Mon, 09 Sep 2024 16:59:06 +0200
+
+sip-tester (1:3.7.2-1) unstable; urgency=medium
+
+  * New upstream version 3.7.2
+
+ -- Victor Seva <vseva@debian.org>  Fri, 17 Nov 2023 15:28:33 +0100
+
+sip-tester (1:3.7.1-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Trim trailing whitespace.
+  * Use secure copyright file specification URI.
+  * Bump debhelper from old 12 to 13.
+  * Set upstream metadata fields: Repository-Browse.
+  * Changed vcs type from git to Git based on URL.
+  * Update standards version to 4.6.1, no changes needed.
+  * Use secure URI in Homepage field.
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository.
+  * Update standards version to 4.6.2, no changes needed.
+
+  [ Victor Seva ]
+  * update watch file
+  * New upstream version 3.7.0
+  * rules: version.h is already in the proper directory
+  * update libncurses dependency
+  * enable ssl support using wolfssl
+  * New upstream version 3.7.1
+
+ -- Victor Seva <vseva@debian.org>  Thu, 05 Oct 2023 09:45:09 +0200
+
+sip-tester (1:3.6.1-1) unstable; urgency=medium
+
+  * New upstream version 3.6.1
+  * upstream use now cmake
+
+ -- Victor Seva <vseva@debian.org>  Fri, 15 Jan 2021 14:38:30 +0100
+
+sip-tester (1:3.6.0-1) unstable; urgency=medium
+
+  * New upstream version 3.6.0 (Closes: #925830)
+  * remove already applied patches
+  * upgrade debhelper to 12. Upgrade Standards-Version to 4.4.1
+  * FAQ.md was removed upstream
+
+ -- Victor Seva <vseva@debian.org>  Mon, 30 Dec 2019 10:26:51 +0100
+
+sip-tester (1:3.5.2-1) unstable; urgency=medium
+
+  * New upstream version 3.5.2
+  * update Vcs-* due migration to salsa
+  * patch for alpha (Closes: #902105)
+  * add rtpstream and sctp support
+  * fix sctp
+  * use upstream manpage
+  * install pcap files
+  * add FAQ.md and CHANGES.md files on docs
+  * update debian/watch
+  * update Standards-Version to 4.2.1, no changes needed
+
+ -- Victor Seva <vseva@debian.org>  Mon, 10 Dec 2018 07:41:51 +0100
+
+sip-tester (1:3.5.1-2) unstable; urgency=medium
+
+  * [9a06454] add note on description about no auth support
+
+ -- Victor Seva <vseva@debian.org>  Thu, 15 Jun 2017 16:56:35 +0200
+
+sip-tester (1:3.5.1-1) experimental; urgency=medium
+
+  * [3083f04] New upstream version 3.5.1 (Closes: #809196)
+  * [f009492] debian/copyright switch to format 1.0
+  * [eccbbcc] debian/watch: project is now in github
+  * [3cf35c8] use autoreconf
+  * [5bc2474] remove old patches
+  * [2d19a31] support hardening
+
+ -- Victor Seva <vseva@debian.org>  Thu, 15 Jun 2017 16:54:19 +0200
+
+sip-tester (1:3.2-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+
+  [ Bas Couwenberg ]
+  * Update build dependencies for GSL 2, change libgsl0-dev to libgsl-dev.
+    Closes: #807226
+
+ -- Mattia Rizzolo <mattia@debian.org>  Tue, 26 Jan 2016 12:16:10 +0000
+
+sip-tester (1:3.2-1) unstable; urgency=low
+
+  [ Paul Belanger ]
+  * New Upstream Release (Closes: #623915).
+  * Switch to dpkg-source 3.0 (quilt) format
+  * Building with PCAP play.
+  * Switch back to Debhelper.
+  * debian/patches/spelling-error-in-binary: Fix lintian warning
+
+  [ Mark Purcell ]
+  * Drop pabs from Uploaders: at his request
+  * fix debhelper-overrides-need-versioned-build-depends
+  * fix description-synopsis-starts-with-article
+
+ -- Mark Purcell <msp@debian.org>  Thu, 03 Nov 2011 21:56:17 +1100
+
+sip-tester (1:3.1-3) unstable; urgency=low
+
+  * Fix "pkg-config: command not found" Added Build-Depends: (Closes: #585904)
+
+ -- Mark Purcell <msp@debian.org>  Tue, 15 Jun 2010 07:36:34 +1000
+
+sip-tester (1:3.1-2) unstable; urgency=low
+
+  * Really Build-Depends: libgsl0-dev - thks pabs & Nobuhuro (Closes: #585820)
+  * Refresh enable-gls.patch
+
+ -- Mark Purcell <msp@debian.org>  Mon, 14 Jun 2010 09:22:37 +1000
+
+sip-tester (1:3.1-1) unstable; urgency=low
+
+  * New Upstream Release - (Closes: #510663)
+  * Update debian/watch - (Closes: #450035)
+  * Switch Maintainer: Debian VoIP Team pkg-voip-maintainers
+    - Thanks & Welcome ARAKI Yasuhiro
+  * Switch to cdbs
+    - Added ${misc:Depends}
+  * Update to Standards 3.8.0:
+    - Add Homepage:
+    - Add Vcs- headers
+    - debian/compat -> 7
+  * Update debian/copyright
+  * debian/patches/include-limits.patch
+  * Drop OpenSSL support - Build-Conflicts: libssl-dev
+    - possible-gpl-code-linked-with-openssl
+    - Fixes "GPL code linked with OpenSSL without permission" (Closes: #581069)
+  * Add resonable man page with help2man - sipp.1 (Closes: #581067)
+  * Enable GLS - Build-Depends: & enable-gsl.patch (Closes: #581335)
+
+ -- Mark Purcell <msp@debian.org>  Sun, 13 Jun 2010 16:15:44 +1000
+
+sip-tester (3.1.r590-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Sat, 23 Jan 2010 13:37:20 +0900
+
+sip-tester (3.1.r577-1) unstable; urgency=low
+
+  * New upstream release (from svn trunk tree. Version 577).
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Fri, 20 Mar 2009 17:42:03 +0900
+
+sip-tester (2.0.1-1.2) unstable; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * CVE-2008-1959: Fix stack-based buffer overflow in the
+    get_remote_video_port_media function
+  * CVE-2008-2085: Fix stack-baseed buffer overflow in the
+    get_remote_ip_media and get_remote_ipv6_media
+    functions which lead to arbitrary code execution (Closes: #479039).
+
+ -- Nico Golde <nion@debian.org>  Sun, 04 May 2008 13:58:41 +0200
+
+sip-tester (2.0.1-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Change ifdef to detect Tru64 unix. Thanks to Falk Hueffner.
+    Closes: #431308
+
+ -- Thomas Viehmann <tv@beamnet.de>  Mon, 10 Mar 2008 20:19:18 +0000
+
+sip-tester (2.0.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Wed, 16 May 2007 19:15:34 +0900
+
+sip-tester (1.1rc4-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * sipp.hpp: Use socklen_t on all architectures.  Closes: #302092.
+  * Makefile: Remove `+DD64' from ia64-specific flags.  Closes: #362178.
+
+ -- Matej Vela <vela@debian.org>  Thu, 18 May 2006 16:59:35 -0500
+
+sip-tester (1.1rc4-2) unstable; urgency=low
+
+  * package description update. Thanks W. Borgert <debacle@debian.org>. (Closes: #349687)
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Wed, 25 Jan 2006 18:12:21 +0900
+
+sip-tester (1.1rc4-1) unstable; urgency=low
+
+  * New upstream release
+  * RTP play capabilities.
+  * add libnet1-dev and libpcap-dev in Build-Depends:.
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Mon, 26 Dec 2005 14:31:31 +0900
+
+sip-tester (1.1rc3-1) unstable; urgency=low
+
+  * New upstream release. (Closes: #330425)
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Tue,  4 Oct 2005 14:20:31 +0900
+
+sip-tester (1.1rc2-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- araki yasuhiro <ar@debian.org>  Wed,  3 Aug 2005 15:02:57 +0900
+
+sip-tester (1.1rc1-3) unstable; urgency=low
+
+  * extend the package description. Thanks to Matias Hermanrud Fjeld.
+    Closes: #304099
+  * Fix: Session "net" to "comm".
+  * Building with TLS and authentication.
+  * Fix: FTBFS: cc: cannot specify -o with -c or -S and multiple compilations.
+    Closes: #302090
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Mon, 11 Apr 2005 11:53:53 +0900
+
+sip-tester (1.1rc1-2) unstable; urgency=low
+
+  * FIX: Missing Build-Depends on 'libncurses5-dev'. Thanks to Andreas
+    Jochens. Closes: #302028
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Wed, 30 Mar 2005 09:25:37 +0900
+
+sip-tester (1.1rc1-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- ARAKI Yasuhiro <ar@debian.org>  Wed,  9 Mar 2005 17:55:42 +0900
