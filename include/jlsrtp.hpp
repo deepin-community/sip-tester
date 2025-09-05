@@ -25,18 +25,20 @@
 #include <openssl/rand.h>
 #include <openssl/hmac.h>
 #elif defined(USE_WOLFSSL)
+#include <wolfssl/options.h>
 #include <wolfssl/openssl/aes.h>
 #include <wolfssl/openssl/evp.h>
 #include <wolfssl/openssl/rand.h>
 #include <wolfssl/openssl/hmac.h>
 #endif
 
+#include <string>
+
 #if defined(USE_OPENSSL) || defined(USE_WOLFSSL)
 
-#include <string>
 #include <vector>
 
-#define JLSRTP_VERSION              0.5
+#define JLSRTP_VERSION              0.6
 #define JLSRTP_ENCRYPTION_KEY_LENGTH        16  // bytes
 #define JLSRTP_SALTING_KEY_LENGTH           14  // bytes
 #define JLSRTP_AUTHENTICATION_KEY_LENGTH    20  // bytes
@@ -612,7 +614,7 @@ class JLSRTP
          *
          * Resets crypto context
          *
-         * @param[in]       sssrc       SSRC ID
+         * @param[in]       ssrc        SSRC ID
          * @param[in]       ipAddress   IP address
          * @param[in]       port        Port
          */
@@ -1159,11 +1161,11 @@ class JLSRTP
          *
          * Custom constructor
          *
-         * @param[in]       sssrc       SSRC ID
+         * @param[in]       ssrc        SSRC ID
          * @param[in]       ipAddress   IP address
          * @param[in]       port        Port
          */
-        JLSRTP(unsigned int ssrc, std::string ipAddress, unsigned short port);
+        JLSRTP(unsigned int ssrc, const std::string& ipAddress, unsigned short port);
 
         /**
          * ~JLSRTP
@@ -1186,6 +1188,17 @@ class JLSRTP
          * Default constructor
          */
         JLSRTP();
+
+        /**
+         * JLSRTP
+         *
+         * Custom constructor
+         *
+         * @param[in]       ssrc        SSRC ID
+         * @param[in]       ipAddress   IP address
+         * @param[in]       port        Port
+         */
+        JLSRTP(unsigned int ssrc, const std::string& ipAddress, unsigned short port);
 
         /**
          * ~JLSRTP

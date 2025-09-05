@@ -175,6 +175,8 @@ static void process_set(char* what)
             display_scenario = main_scenario;
         } else if (!strcmp(rest, "ooc") && ooc_scenario) {
             display_scenario = ooc_scenario;
+        } else if (!strcmp(rest, "rx") && rx_scenario) {
+            display_scenario = rx_scenario;
         } else {
             WARNING("Unknown display scenario: %s", rest);
         }
@@ -439,13 +441,13 @@ static bool process_key(int c)
         break;
 
     case 'q':
-        quitting+=10;
+        quitting += 10;
         print_statistics(0);
         break;
 
     case 'Q':
         /* We are going to break, so we never have a chance to press q twice. */
-        quitting+=20;
+        quitting += 20;
         print_statistics(0);
         break;
     }
@@ -530,6 +532,7 @@ void setup_ctrl_socket()
             WARNING("Unable to bind remote control socket (tried UDP ports %d-%d): %s",
                     firstport, port - 1, strerror(errno));
         }
+        close(sock);
         return;
     }
 
@@ -936,7 +939,7 @@ void SIPpSocket::invalidate()
 #endif
     }
     if (ss_fd != -1 && ss_fd != stdin_fileno) {
-        if (ss_transport != T_UDP) {
+        if (ss_transport == T_TCP && ss_transport != T_TLS) {
             if (shutdown(ss_fd, SHUT_RDWR) < 0) {
                 WARNING_NO("Failed to shutdown socket %d", ss_fd);
             }
@@ -1112,19 +1115,20 @@ void process_message(SIPpSocket *socket, char *msg, ssize_t msg_size, struct soc
 
     if (useMessagef == 1) {
         TRACE_MSG("----------------------------------------------- %s\n"
-                  "%s %smessage received [%zu] bytes :\n\n%s\n",
+                  "%s %smessage received [%zu] bytes:\n\n%s\n",
                   CStat::formatTime(&currentTime, true),
                   TRANSPORT_TO_STRING(socket->ss_transport),
                   socket->ss_control ? "control " : "",
                   msg_size, msg);
     }
 
+    // got as message not relating to a known call
     if (!listener_ptr) {
         if (thirdPartyMode == MODE_3PCC_CONTROLLER_B || thirdPartyMode == MODE_3PCC_A_PASSIVE ||
                 thirdPartyMode == MODE_MASTER_PASSIVE || thirdPartyMode == MODE_SLAVE) {
             // Adding a new OUTGOING call !
             main_scenario->stats->computeStat(CStat::E_CREATE_OUTGOING_CALL);
-            call *new_ptr = new call(call_id, local_ip_is_ipv6, 0, use_remote_sending_addr ? &remote_sending_sockaddr : &remote_sockaddr);
+            call *new_ptr = new call(main_scenario, call_id, local_ip_is_ipv6, 0, use_remote_sending_addr ? &remote_sending_sockaddr : &remote_sockaddr);
 
             outbound_congestion = false;
             if ((socket != main_socket) &&
@@ -1161,7 +1165,18 @@ void process_message(SIPpSocket *socket, char *msg, ssize_t msg_size, struct soc
 
             // Adding a new INCOMING call !
             main_scenario->stats->computeStat(CStat::E_CREATE_INCOMING_CALL);
-            listener_ptr = new call(call_id, socket, use_remote_sending_addr ? &remote_sending_sockaddr : src);
+            listener_ptr = new call(main_scenario, call_id, socket, use_remote_sending_addr ? &remote_sending_sockaddr : src);
+        } else if(creationMode == MODE_MIXED) {
+            /* Ignore quitting for now ... as this is triggered when all tx calls are active
+            if (quitting >= 1) {
+                CStat::globalStat(CStat::E_OUT_OF_CALL_MSGS);
+                TRACE_MSG("Discarded message for new calls while quitting\n");
+                return;
+            }
+            */
+            // Adding a new INCOMING call !
+            rx_scenario->stats->computeStat(CStat::E_CREATE_INCOMING_CALL);
+            listener_ptr = new call(rx_scenario, call_id, socket, use_remote_sending_addr ? &remote_sending_sockaddr : src);
         } else { // mode != from SERVER and 3PCC Controller B
             // This is a message that is not relating to any known call
             if (ooc_scenario) {
@@ -1219,32 +1234,20 @@ void process_message(SIPpSocket *socket, char *msg, ssize_t msg_size, struct soc
     if ((socket == localTwinSippSocket) || (socket == twinSippSocket) || (is_a_local_socket(socket))) {
         listener_ptr -> process_twinSippCom(msg);
     } else {
+        /* This is a message on a known call - process it */
         listener_ptr -> process_incoming(msg, src);
     }
 }
 
 SIPpSocket::SIPpSocket(bool use_ipv6, int transport, int fd, int accepting):
-    ss_count(1),
     ss_ipv6(use_ipv6),
     ss_transport(transport),
-    ss_control(false),
-    ss_fd(fd),
-    ss_bind_port(0),
-    ss_comp_state(nullptr),
-    ss_changed_dest(false),
-    ss_congested(false),
-    ss_invalid(false),
-    ss_in(nullptr),
-    ss_out(nullptr),
-    ss_out_tail(nullptr),
-    ss_msglen(0)
+    ss_fd(fd)
 {
     /* Initialize all sockets with our destination address. */
     memcpy(&ss_dest, &remote_sockaddr, sizeof(ss_dest));
 
 #if defined(USE_OPENSSL) || defined(USE_WOLFSSL)
-    ss_ssl = nullptr;
-
     if (transport == T_TLS) {
         int flags = fcntl(fd, F_GETFL, 0);
         fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -1926,7 +1929,7 @@ int SIPpSocket::read_error(int ret)
                     if (thirdPartyMode == MODE_3PCC_CONTROLLER_B) {
                         WARNING("3PCC controller A has ended -> exiting");
                         quitting += 20;
-                    } else {
+                    } else if (!quitting) {
                         quitting = 1;
                     }
                 }
@@ -2207,7 +2210,7 @@ int SIPpSocket::write(const char *buffer, ssize_t len, int flags, struct sockadd
         /* Everything is great. */
         if (useMessagef == 1) {
             TRACE_MSG("----------------------------------------------- %s\n"
-                      "%s %smessage sent (%zu bytes):\n\n%.*s\n",
+                      "%s %smessage sent [%zu] bytes:\n\n%.*s\n",
                       CStat::formatTime(&currentTime, true),
                       TRANSPORT_TO_STRING(ss_transport),
                       ss_control ? "control " : "",
@@ -2218,7 +2221,7 @@ int SIPpSocket::write(const char *buffer, ssize_t len, int flags, struct sockadd
             char *msg = strdup(buffer);
             const char *call_id = get_trimmed_call_id(msg);
             TRACE_SHORTMSG("%s\tS\t%s\tCSeq:%s\t%s\n",
-                           CStat::formatTime(&currentTime), call_id, get_header_content(msg, "CSeq:"), get_first_line(msg));
+                           CStat::formatTime(&currentTime, rfc3339), call_id, get_header_content(msg, "CSeq:"), get_first_line(msg));
             free(msg);
         }
 
@@ -2885,9 +2888,9 @@ void SIPpSocket::pollset_process(int wait)
         int poll_idx = (int)epollevents[event_idx].data.u32;
 #else
     for (size_t poll_idx = 0; rs > 0 && poll_idx < pollnfds; poll_idx++) {
+        int events = 0;
 #endif
         SIPpSocket *sock = sockets[poll_idx];
-        int events = 0;
         int ret = 0;
 
         assert(sock);
@@ -2913,11 +2916,11 @@ void SIPpSocket::pollset_process(int wait)
                 }
 #else
                 pollfiles[poll_idx].events &= ~POLLOUT;
+                events++;
 #endif
                 sock->ss_congested = false;
 
                 sock->flush();
-                events++;
             }
         }
 
@@ -2988,7 +2991,9 @@ void SIPpSocket::pollset_process(int wait)
                     }
                 }
             }
+#ifndef HAVE_EPOLL
             events++;
+#endif
         }
 
         /* Here the logic diverges; if we're using epoll, we want to stay in the

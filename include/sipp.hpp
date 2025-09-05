@@ -214,6 +214,7 @@ MAYBE_EXTERN const char       * auth_username           DEFVAL(0);
 MAYBE_EXTERN unsigned long      report_freq             DEFVAL(DEFAULT_REPORT_FREQ);
 MAYBE_EXTERN unsigned long      report_freq_dumpLog     DEFVAL
 (DEFAULT_REPORT_FREQ_DUMP_LOG);
+MAYBE_EXTERN bool               rfc3339                 DEFVAL(false);
 MAYBE_EXTERN bool               periodic_rtd            DEFVAL(false);
 MAYBE_EXTERN const char       * stat_delimiter          DEFVAL(";");
 
@@ -326,13 +327,14 @@ MAYBE_EXTERN double             tls_version             DEFVAL(0.0);
 MAYBE_EXTERN const char       * bind_to_device_name     DEFVAL(nullptr);
 #endif
 
-MAYBE_EXTERN char*              scenario_file           DEFVAL(nullptr);
-MAYBE_EXTERN char*              scenario_path           DEFVAL(nullptr);
+MAYBE_EXTERN const char       * scenario_file           DEFVAL(nullptr);
 
 // extern field file management
 typedef std::map<std::string, FileContents *> file_map;
 MAYBE_EXTERN file_map inFiles;
 typedef std::map<std::string, str_int_map *> file_index;
+MAYBE_EXTERN char *rx_ip_file DEFVAL(NULL);
+MAYBE_EXTERN char *rx_default_file DEFVAL(NULL);
 MAYBE_EXTERN char *ip_file DEFVAL(nullptr);
 MAYBE_EXTERN char *default_file DEFVAL(nullptr);
 
@@ -493,6 +495,7 @@ void connect_local_twin_socket(char *);
 void close_peer_sockets();
 void close_local_sockets();
 void free_peer_addr_map();
+void randomseed();
 
 /********************* Reset global kludge  *******************/
 

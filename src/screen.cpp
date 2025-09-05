@@ -80,6 +80,17 @@ void print_statistics(int last)
     }
 }
 
+static bool display_client()
+{
+    return (creationMode == MODE_CLIENT) || ((creationMode == MODE_MIXED) && (display_scenario == main_scenario));
+}
+
+static bool display_server()
+{
+    return (creationMode == MODE_SERVER) || ((creationMode == MODE_MIXED) && (display_scenario == rx_scenario));
+}
+
+
 void ScreenPrinter::print_closing_stats() {
     M_last = true;
     get_lines();
@@ -183,21 +194,29 @@ void ScreenPrinter::get_lines()
     }
 
     if (M_last) {
-        lines.push_back("------------------------------ Test Terminated "
-                   "--------------------------------");
-    } else if (quitting) {
+        lines.push_back(
+            "------------------------------ Test Terminated "
+            "--------------------------------");
+    } else if (quitting >= 1 && quitting < 11) {
         lines.push_back(
             "------- Waiting for active calls to end. Press [q] again "
             "to force exit. -------");
+    } else if (quitting) {
+        lines.push_back(
+            "-------------------------------- Forcing quit "
+            "---------------------------------");
     } else if (paused) {
-        lines.push_back("----------------- Traffic Paused - Press [p] again to "
-                        "resume ------------------");
+        lines.push_back(
+            "----------------- Traffic Paused - Press [p] again to "
+            "resume ------------------");
     } else if (cpu_max) {
-        lines.push_back("-------------------------------- CPU CONGESTED "
-                        "---------------------------------");
+        lines.push_back(
+            "-------------------------------- CPU CONGESTED "
+            "---------------------------------");
     } else if (outbound_congestion) {
-        lines.push_back("------------------------------ OUTBOUND CONGESTION "
-                        "-----------------------------");
+        lines.push_back(
+            "------------------------------ OUTBOUND CONGESTION "
+            "-----------------------------");
     } else {
         if (creationMode == MODE_CLIENT) {
             switch (thirdPartyMode) {
@@ -220,6 +239,10 @@ void ScreenPrinter::get_lines()
                 ERROR("Internal error: creationMode=%d, thirdPartyMode=%d",
                       creationMode, thirdPartyMode);
             }
+        } else if((creationMode == MODE_MIXED) && (display_scenario == main_scenario)) {
+            lines.push_back("----------------Sipp Mixed Mode - main -  call originating scenario------------");
+        } else if((creationMode == MODE_MIXED) && (display_scenario == rx_scenario)) {
+            lines.push_back("-----------------Sipp Mixed mode - rx - call terminating scenario-------------");
         } else {
             assert(creationMode == MODE_SERVER);
             switch (thirdPartyMode) {
@@ -270,14 +293,14 @@ void ScreenPrinter::draw_scenario_screen()
     unsigned long long total_calls =
         display_scenario->stats->GetStat(CStat::CPT_C_IncomingCallCreated) +
         display_scenario->stats->GetStat(CStat::CPT_C_OutgoingCallCreated);
-    if (creationMode == MODE_SERVER) {
+    if (display_server()) {
         lines.push_back("  Port   Total-time  Total-calls  Transport");
         snprintf(buf, bufsiz, "  %-5d %6lu.%02lu s     %8llu  %s", local_port,
                  clock_tick / 1000, (clock_tick % 1000) / 10, total_calls,
                  TRANSPORT_TO_STRING(transport));
         lines.push_back(buf);
     } else {
-        assert(creationMode == MODE_CLIENT);
+        assert(display_client());
         if (users >= 0) {
             lines.push_back("  Users (length)   Port   Total-time  "
                             "Total-calls  Remote-host");
@@ -320,7 +343,7 @@ void ScreenPrinter::draw_scenario_screen()
     lines.push_back(buf);
 
     /* 2nd line */
-    if (creationMode == MODE_SERVER) {
+    if (display_server()) {
         snprintf(left_buf, 40, "%llu calls",
                  display_scenario->stats->GetStat(CStat::CPT_C_CurrentCall));
     } else {
@@ -342,7 +365,7 @@ void ScreenPrinter::draw_scenario_screen()
     /* 3rd line dead call msgs, and optional out-of-call msg */
     snprintf(left_buf, 40, "%llu dead call msg (discarded)",
              display_scenario->stats->GetStat(CStat::CPT_G_C_DeadCallMsgs));
-    if (creationMode == MODE_CLIENT) {
+    if (display_client()) {
         snprintf(
             buf, bufsiz, "  %-38s  %llu out-of-call msg (discarded)", left_buf,
             display_scenario->stats->GetStat(CStat::CPT_G_C_OutOfCallMsgs));
@@ -479,7 +502,7 @@ void ScreenPrinter::draw_scenario_screen()
         int buf_len = 0;
 
         if (SendingMessage* src = curmsg->send_scheme) {
-            if (creationMode == MODE_SERVER) {
+            if (display_server()) {
                 if (src->isResponse()) {
                     buf_len += snprintf(buf + buf_len, bufsiz - buf_len,
                                         "  <---------- %-10d ", src->getCode());
@@ -527,12 +550,12 @@ void ScreenPrinter::draw_scenario_screen()
                         : "");
             }
         } else if (curmsg->recv_response) {
-            if (creationMode == MODE_SERVER) {
+            if (display_server()) {
                 buf_len += snprintf(buf + buf_len, bufsiz - buf_len,
-                                    "  ----------> %-10d ", curmsg->recv_response);
+                                    "  ----------> %-10s ", curmsg->recv_response);
             } else {
                 buf_len += snprintf(buf + buf_len, bufsiz - buf_len,
-                                    "  %10d <---------- ", curmsg->recv_response);
+                                    "  %10s <---------- ", curmsg->recv_response);
             }
 
             if (curmsg->start_rtd) {
@@ -570,7 +593,7 @@ void ScreenPrinter::draw_scenario_screen()
             }
             int len = strlen(desc) < 9 ? 9 : strlen(desc);
 
-            if (creationMode == MODE_SERVER) {
+            if (display_server()) {
                 snprintf(left_buf, 40, "  [%9s] Pause%*s", desc,
                         23 - len > 0 ? 23 - len : 0, "");
             } else {
@@ -583,7 +606,7 @@ void ScreenPrinter::draw_scenario_screen()
                      curmsg->sessions,
                      curmsg->nb_unexp);
         } else if (curmsg->recv_request) {
-            if (creationMode == MODE_SERVER) {
+            if (display_server()) {
                 buf_len +=
                     snprintf(buf + buf_len, bufsiz - buf_len,
                              "  ----------> %-10s ", curmsg->recv_request);

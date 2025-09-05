@@ -37,6 +37,7 @@
 #if defined(USE_OPENSSL)
 #include <openssl/evp.h>
 #elif defined(USE_WOLFSSL)
+#include <wolfssl/options.h>
 #include <wolfssl/openssl/evp.h>
 #endif
 
@@ -400,6 +401,7 @@ static int createAuthResponseSHA256(
     EVP_DigestFinal_ex(mdctx, resp, &digest_len);
     hashToHex(&resp[0], result, SHA256_HASH_SIZE);
 
+    EVP_MD_CTX_free(mdctx);
     return 1;
 }
 #endif // USE_SHA256
