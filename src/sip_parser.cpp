@@ -221,7 +221,9 @@ char* get_header(const char* message, const char* name, bool content)
             *ptr = '\n';
         }
 
-        src++;
+        if (*src) {
+            src++;
+        }
     }
 
     /* No header found? */
@@ -455,7 +457,7 @@ static const char* internal_find_header(const char* msg, const char* name, const
         ptr = strchr(ptr, '\n');
         if (!ptr || ptr[-1] != '\r' || (ptr[1] == '\r' && ptr[2] == '\n')) {
             if (ptr && ptr[-1] != '\r') {
-                WARNING("Missing CR during header scan at pos %ld", ptr - msg);
+                WARNING("Missing CR during header scan at pos %d", int(ptr - msg));
                 /* continue? */
             }
             return nullptr;

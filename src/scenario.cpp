@@ -53,7 +53,7 @@ message::message(int index, const char *desc)
     retrans_delay = 0;
     timeout = 0;
 
-    recv_response = 0;
+    recv_response = nullptr; // free on exit
     recv_request = nullptr; // free on exit
     optional = 0;
     advance_state = true;
@@ -112,14 +112,15 @@ message::message(int index, const char *desc)
 
 message::~message()
 {
-    delete(pause_distribution);
+    delete pause_distribution;
     free(pause_desc);
-    delete(send_scheme);
+    delete send_scheme;
     free(recv_request);
+    free(recv_response);
     if (regexp_compile != nullptr) {
         regfree(regexp_compile);
     }
-    free(regexp_compile);
+    delete regexp_compile;
 
     free(display_str);
     free(nextLabel);
@@ -128,13 +129,14 @@ message::~message()
     free(peer_dest);
     free(peer_src);
 
-    delete(M_actions);
-    delete(M_sendCmdData);
+    delete M_actions;
+    delete M_sendCmdData;
     free(recv_response_for_cseq_method_list);
 }
 
 /******** Global variables which compose the scenario file **********/
 
+scenario      *rx_scenario;
 scenario      *main_scenario;
 scenario      *ooc_scenario;
 scenario      *aa_scenario;
@@ -407,6 +409,25 @@ int scenario::find_var(const char *varName)
 void scenario::addRtpTaskThreadID(pthread_t id)
 {
     threadIDs[id] = "threadID";
+}
+
+void scenario::setFileName(const char *name)
+{
+    const char* sep = strrchr(name, '/');
+    if (sep) {
+        ++sep; // include slash
+        path = std::string(name, sep - name);
+    } else {
+        path.clear();
+        sep = name;
+    }
+    const char* ext = strrchr(sep, '.');
+    if (ext && strcmp(ext, ".xml") == 0) {
+        fileName = std::string(sep, ext - sep);
+    } else {
+        fileName = sep;
+    }
+    stats->setFileName(fileName.c_str(), ".csv");
 }
 
 void scenario::removeRtpTaskThreadID(pthread_t id)
@@ -696,6 +717,9 @@ scenario::scenario(char * filename, int deflt)
     stats = new CStat();
     allocVars = new AllocVariableTable(userVariables);
 
+    if(filename) {
+        setFileName(filename);
+    }
     hidedefault = false;
 
     elem = xp_open_element(0);
@@ -891,7 +915,7 @@ scenario::scenario(char * filename, int deflt)
                 curmsg->M_type = MSG_TYPE_RECV;
                 /* Received messages descriptions */
                 if((cptr = xp_get_value("response"))) {
-                    curmsg ->recv_response = get_long(cptr, "response code");
+                    curmsg ->recv_response = strdup(cptr);
                     if (method_list) {
                         curmsg->recv_response_for_cseq_method_list = strdup(method_list);
                     }
@@ -1183,7 +1207,7 @@ CSample *parse_distribution(bool oldstyle = false)
     } else if (!strcmp(distname, "negbin")) {
         double n = xp_get_double("n", "Negative Binomial distribution");
         double p = xp_get_double("p", "Negative Binomial distribution");
-        distribution = new CNegBin(n, p);
+        distribution = new CNegBin(p, n);
 #else
     } else if (!strcmp(distname, "normal")
                || !strcmp(distname, "lognormal")
@@ -1247,7 +1271,9 @@ void scenario::computeSippMode()
     bool isRecvCmdFound = false;
     bool isSendCmdFound = false;
 
-    creationMode = -1;
+    if (creationMode != MODE_MIXED) {
+        creationMode = -1;
+    }
     sendMode = -1;
     thirdPartyMode = MODE_3PCC_NONE;
 
@@ -1880,96 +1906,6 @@ void scenario::getCommonAttributes(message *message)
         }
         message -> onTimeoutLabel = strdup(ptr);
     }
-}
-
-// char* manipulation : create a int[] from a char*
-// test first is the char* is formed by int separated by coma
-// and then create the table
-
-int isWellFormed(char * P_listeStr, int * nombre)
-{
-    char * ptr = P_listeStr;
-    int sizeOf;
-    bool isANumber;
-
-    (*nombre) = 0;
-    sizeOf = strlen(P_listeStr);
-    // getting the number
-    if(sizeOf > 0) {
-        // is the string well formed ? [0-9] [,]
-        isANumber = false;
-        for(int i=0; i<=sizeOf; i++) {
-            switch(ptr[i]) {
-            case ',':
-                if(isANumber == false) {
-                    return(0);
-                } else {
-                    (*nombre)++;
-                }
-                isANumber = false;
-                break;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                isANumber = true;
-                break;
-            case '\t':
-            case ' ' :
-                break;
-            case '\0':
-                if(isANumber == false) {
-                    return(0);
-                } else {
-                    (*nombre)++;
-                }
-                break;
-            default:
-                return(0);
-            }
-        } // end for
-    }
-    return(1);
-}
-
-int createIntegerTable(char * P_listeStr,
-                       unsigned int ** listeInteger,
-                       int * sizeOfList)
-{
-    int nb=0;
-    char * ptr = P_listeStr;
-    char * ptr_prev = P_listeStr;
-    unsigned int current_int;
-
-    if(P_listeStr) {
-        if(isWellFormed(P_listeStr, sizeOfList) == 1) {
-            (*listeInteger) = new unsigned int[(*sizeOfList)];
-            while((*ptr) != ('\0')) {
-                if((*ptr) == ',') {
-                    sscanf(ptr_prev, "%u", &current_int);
-                    if (nb<(*sizeOfList))
-                        (*listeInteger)[nb] = current_int;
-                    nb++;
-                    ptr_prev = ptr+1;
-                }
-                ptr++;
-            }
-
-            // Read the last
-            sscanf(ptr_prev, "%u", &current_int);
-            if (nb<(*sizeOfList))
-                (*listeInteger)[nb] = current_int;
-            nb++;
-            return(1);
-        }
-        return(0);
-    } else return(0);
 }
 
 int createStringTable(const char* inputString, char*** stringList, int* sizeOfList)
